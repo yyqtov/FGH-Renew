@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '12 */6 * * *'
 jobs:
-  renew:
+  run_fgh_renew:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -19,9 +19,9 @@ jobs:
         run: mv private/renew.py renew.py
 
       - name: 🐍 设置 Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.x'
 
       - name: 🗂️ 缓存 Hash 破解模块
         id: cache-captcha-solver
@@ -50,15 +50,19 @@ jobs:
       - name: 🛠️ 安装系统依赖
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y google-chrome-stable xvfb xdotool
+          sudo apt-get install -y \
+            google-chrome-stable \
+            xvfb \
+            x11-utils \
+            xdotool \
+            scrot
 
       - name: 🐍 安装 Python 依赖
-        run: pip install seleniumbase
+        run: |
+          pip install seleniumbase
+          seleniumbase install chromedriver
 
-      - name: 🔧 安装 ChromeDriver
-        run: seleniumbase install chromedriver
-
-      - name: 🧩 初始化浏览器环境
+      - name: 🧩 初始化 Hash 破解模块
         if: steps.cache-captcha-solver.outputs.cache-hit != 'true'
         env:
           SOLVER_URL: ${{ secrets.SOLVER_URL }}
@@ -70,15 +74,14 @@ jobs:
           cp -r "$(dirname $MANIFEST)/." captcha_solver/
           rm -rf solver_raw solver.zip
 
-      - name: 🚀 运行续期脚本
+      - name: 🚀 运行脚本
         env:
           PYTHONIOENCODING: utf-8
           FGH_ACCOUNT: ${{ secrets.FGH_ACCOUNT }}
           GOST_PROXY: ${{ secrets.GOST_PROXY }}
           TG_BOT: ${{ secrets.TG_BOT }}
         run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-            python renew.py
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python renew.py
 
       - name: 📸 上传截图
         if: always()
