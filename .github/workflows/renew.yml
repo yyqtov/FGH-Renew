@@ -2,7 +2,7 @@ name: FGH-Renew
 on:
   workflow_dispatch:
   schedule:
-    - cron: '14 */6 * * *'
+    - cron: '0 */6 * * *'
 jobs:
   run_fgh_renew:
     runs-on: ubuntu-latest
@@ -23,23 +23,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: 🛡️ 启动 GOST 代理转发
-        if: ${{ env.GOST_PROXY != '' }}
-        env:
-          GOST_PROXY: ${{ secrets.GOST_PROXY }}
-        run: |
-          VERSION=$(curl -s https://api.github.com/repos/ginuerzh/gost/releases/latest \
-            | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
-          echo "📦 GOST 版本: $VERSION"
-          wget -q "https://github.com/ginuerzh/gost/releases/download/v${VERSION}/gost_${VERSION}_linux_amd64.tar.gz"
-          tar -xzf "gost_${VERSION}_linux_amd64.tar.gz"
-          chmod +x gost
-          nohup ./gost -L http://:8080 -F "$GOST_PROXY" > gost.log 2>&1 &
-          sleep 3
-          echo "✅ GOST 已启动，测试连通性..."
-          curl -s -x http://127.0.0.1:8080 https://api.ipify.org \
-            | sed 's/\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*/\1**/g'
-
       - name: 🛠️ 安装系统依赖
         run: |
           sudo apt-get update -q
@@ -56,11 +39,29 @@ jobs:
           pip install seleniumbase requests SpeechRecognition pydub
           seleniumbase install chromedriver
 
+      - name: 🌐 启用 WARP 网络
+        uses: fscarmen/warp-on-actions@v1.3
+        with:
+          stack: dual
+          mode: client
+
+      - name: 🔧 修复 DNS
+        run: |
+          echo "[INFO] 停用 systemd-resolved，设置公共 DNS..."
+          sudo systemctl stop systemd-resolved 2>/dev/null || true
+          sudo systemctl disable systemd-resolved 2>/dev/null || true
+          sudo rm -f /etc/resolv.conf
+          echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 1.0.0.1" | sudo tee /etc/resolv.conf
+          sleep 2
+          echo "[INFO] 当前出口 IP:"
+          curl -s --max-time 10 https://api.ipify.org && echo
+          echo "[INFO] WARP Trace:"
+          curl -s --max-time 10 https://www.cloudflare.com/cdn-cgi/trace | grep -E 'ip=|warp=|loc=' || true
+
       - name: 🚀 运行脚本
         env:
           PYTHONIOENCODING: utf-8
           FGH_ACCOUNT: ${{ secrets.FGH_ACCOUNT }}
-          GOST_PROXY: ${{ secrets.GOST_PROXY }}
           TG_BOT: ${{ secrets.TG_BOT }}
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python renew.py
