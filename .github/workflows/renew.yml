@@ -2,7 +2,7 @@ name: FGH-Renew
 on:
   workflow_dispatch:
   schedule:
-    - cron: '12 */6 * * *'
+    - cron: '14 */6 * * *'
 jobs:
   run_fgh_renew:
     runs-on: ubuntu-latest
@@ -22,13 +22,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-
-      - name: 🗂️ 缓存 Hash 破解模块
-        id: cache-captcha-solver
-        uses: actions/cache@v4
-        with:
-          path: captcha_solver
-          key: captcha-solver-chromium-latest-v1
 
       - name: 🛡️ 启动 GOST 代理转发
         if: ${{ env.GOST_PROXY != '' }}
@@ -55,24 +48,13 @@ jobs:
             xvfb \
             x11-utils \
             xdotool \
-            scrot
+            scrot \
+            ffmpeg
 
       - name: 🐍 安装 Python 依赖
         run: |
-          pip install seleniumbase
+          pip install seleniumbase requests SpeechRecognition pydub
           seleniumbase install chromedriver
-
-      - name: 🧩 初始化 Hash 破解模块
-        if: steps.cache-captcha-solver.outputs.cache-hit != 'true'
-        env:
-          SOLVER_URL: ${{ secrets.SOLVER_URL }}
-        run: |
-          wget -q "$SOLVER_URL" -O solver.zip
-          unzip solver.zip -d solver_raw
-          MANIFEST=$(find solver_raw -name "manifest.json" | head -1)
-          mkdir -p captcha_solver
-          cp -r "$(dirname $MANIFEST)/." captcha_solver/
-          rm -rf solver_raw solver.zip
 
       - name: 🚀 运行脚本
         env:
